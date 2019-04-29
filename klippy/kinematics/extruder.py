@@ -9,13 +9,14 @@ import stepper, homing, chelper
 EXTRUDE_DIFF_IGNORE = 1.02
 
 class PrinterExtruder:
-    def __init__(self, config):
+    def __init__(self, config, extruder_num):
         self.printer = config.get_printer()
         self.name = config.get_name()
         shared_heater = config.get('shared_heater', None)
         pheater = self.printer.lookup_object('heater')
+        gcode_id = 'T%d' % (extruder_num,)
         if shared_heater is None:
-            self.heater = pheater.setup_heater(config)
+            self.heater = pheater.setup_heater(config, gcode_id)
         else:
             self.heater = pheater.lookup_heater(shared_heater)
         self.stepper = stepper.PrinterStepper(config)
@@ -59,8 +60,8 @@ class PrinterExtruder:
             gcode.register_mux_command("SET_PRESSURE_ADVANCE", "EXTRUDER", None,
                                        self.cmd_default_SET_PRESSURE_ADVANCE,
                                        desc=self.cmd_SET_PRESSURE_ADVANCE_help)
-        gcode.register_mux_command("SET_PRESSURE_ADVANCE", "EXTRUDER", self.name,
-                                   self.cmd_SET_PRESSURE_ADVANCE,
+        gcode.register_mux_command("SET_PRESSURE_ADVANCE", "EXTRUDER",
+                                   self.name, self.cmd_SET_PRESSURE_ADVANCE,
                                    desc=self.cmd_SET_PRESSURE_ADVANCE_help)
     def get_heater(self):
         return self.heater
@@ -215,7 +216,7 @@ class PrinterExtruder:
                "pressure_advance_lookahead_time: %.6f" % (
                    pressure_advance, pressure_advance_lookahead_time))
         self.printer.set_rollover_info(self.name, "%s: %s" % (self.name, msg))
-        gcode.respond_info(msg)
+        gcode.respond_info(msg, log=False)
 
 # Dummy extruder class used when a printer has no extruder at all
 class DummyExtruder:
@@ -237,11 +238,12 @@ def add_printer_objects(config):
         section = 'extruder%d' % (i,)
         if not config.has_section(section):
             if not i and config.has_section('extruder'):
-                pe = PrinterExtruder(config.getsection('extruder'))
+                pe = PrinterExtruder(config.getsection('extruder'), 0)
                 printer.add_object('extruder0', pe)
                 continue
             break
-        printer.add_object(section, PrinterExtruder(config.getsection(section)))
+        pe = PrinterExtruder(config.getsection(section), i)
+        printer.add_object(section, pe)
 
 def get_printer_extruders(printer):
     out = []
